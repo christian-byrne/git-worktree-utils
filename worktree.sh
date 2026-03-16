@@ -71,8 +71,15 @@ wt-clone() {
     local repo_path="$WORKTREE_BASE/$name"
 
     if [[ -d "$repo_path" ]]; then
-        echo "Error: $repo_path already exists"
-        return 1
+        # Check if it's a valid, complete clone (has .bare with HEAD)
+        if [[ -d "$repo_path/.bare" ]] && [[ -f "$repo_path/.bare/HEAD" ]]; then
+            echo "Already cloned: $repo_path"
+            echo "  Use 'wt-new $name <branch>' to create a worktree"
+            return 0
+        fi
+        # Broken/incomplete clone — clean up and re-clone
+        echo "Warning: $repo_path exists but is incomplete (no .bare/HEAD). Removing and re-cloning..."
+        rm -rf "$repo_path"
     fi
 
     echo "Cloning $url into $repo_path..."
