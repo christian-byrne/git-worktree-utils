@@ -15,14 +15,21 @@
 : "${CROSS_REPO_BASE:?CROSS_REPO_BASE must be set}"
 
 # Remember where this file lives so the commands below can reload it on demand.
-# $BASH_SOURCE is $BASH_SOURCE[0] in bash and empty in zsh, which falls through
-# to the install paths listed in wt_ensure_helpers below.
+# Remember this file's own path so the commands below can reload it. $BASH_SOURCE
+# is bash-only; zsh spells it %x, kept inside eval so bash never parses it.
+_wt_lib_src=""
 if [ -n "${BASH_SOURCE:-}" ]; then
-    _wt_lib_dir=$(cd "$(dirname "${BASH_SOURCE}")" && pwd)
-    _wt_lib_file=$(basename "${BASH_SOURCE}")
+    _wt_lib_src="${BASH_SOURCE}"
+elif [ -n "${ZSH_VERSION:-}" ]; then
+    _wt_lib_src=$(eval 'echo ${(%):-%x}')
+fi
+if [ -n "$_wt_lib_src" ]; then
+    _wt_lib_dir=$(cd "$(dirname "$_wt_lib_src")" && pwd)
+    _wt_lib_file=$(basename "$_wt_lib_src")
     export WT_UTILS_LIB="$_wt_lib_dir/$_wt_lib_file"
     unset _wt_lib_dir _wt_lib_file
 fi
+unset _wt_lib_src
 
 # Some harnesses restore a shell by replaying only the functions whose names do
 # not begin with an underscore - Claude Code's shell snapshots do exactly that.
