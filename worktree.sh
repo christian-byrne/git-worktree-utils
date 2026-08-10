@@ -14,6 +14,39 @@
 : "${WORKTREE_BASE:?WORKTREE_BASE must be set}"
 : "${CROSS_REPO_BASE:?CROSS_REPO_BASE must be set}"
 
+# Remember where this file lives so the commands below can reload it on demand.
+# $BASH_SOURCE is $BASH_SOURCE[0] in bash and empty in zsh, which falls through
+# to the install paths listed in wt_ensure_helpers below.
+if [ -n "${BASH_SOURCE:-}" ]; then
+    _wt_lib_dir=$(cd "$(dirname "${BASH_SOURCE}")" && pwd)
+    _wt_lib_file=$(basename "${BASH_SOURCE}")
+    export WT_UTILS_LIB="$_wt_lib_dir/$_wt_lib_file"
+    unset _wt_lib_dir _wt_lib_file
+fi
+
+# Some harnesses restore a shell by replaying only the functions whose names do
+# not begin with an underscore - Claude Code's shell snapshots do exactly that.
+# Such a shell has every wt-* command but none of the _wt_* helpers they call,
+# so an unguarded command expands the helper's output to the empty string and
+# hands git an empty path. Reload the library instead of running on stubs.
+wt_ensure_helpers() {
+    typeset -f _wt_branch_to_dir >/dev/null 2>&1 && return 0
+
+    local candidate
+    for candidate in "${WT_UTILS_LIB:-}" \
+        "$HOME/.local/share/git-worktree-utils/worktree.sh" \
+        "$HOME/worktree-utils/git-worktree-utils/worktree.sh"; do
+        [[ -r "$candidate" ]] || continue
+        # shellcheck source=/dev/null
+        source "$candidate"
+        typeset -f _wt_branch_to_dir >/dev/null 2>&1 && return 0
+    done
+
+    echo "Error: worktree helpers are unavailable and could not be reloaded." >&2
+    echo "Point WT_UTILS_LIB at worktree.sh, or re-source it before calling wt-*." >&2
+    return 1
+}
+
 # Convert branch name to safe directory name (feature/foo -> feature__foo)
 _wt_branch_to_dir() {
     echo "${1//\//__}"
@@ -180,6 +213,7 @@ _wt_list_repos() {
 # Create a new feature worktree
 # Usage: wt-new <repo> <branch-name>
 wt-new() {
+    wt_ensure_helpers || return 1
     local repo="$1"
     local branch="$2"
 
@@ -195,6 +229,11 @@ wt-new() {
     local branch_dir
     branch_dir=$(_wt_branch_to_dir "$branch")
 
+    if [[ -z "$branch_dir" ]]; then
+        echo "Error: could not derive a directory name for branch '$branch'" >&2
+        return 1
+    fi
+
     if [[ ! -d "$repo_path/.bare" ]]; then
         echo "Error: Repository '$repo' not found at $repo_path"
         return 1
@@ -208,7 +247,7 @@ wt-new() {
     git -C "$default_branch_dir" fetch origin && git -C "$default_branch_dir" reset --hard origin/"$default_branch"
 
     # Create worktree from default branch
-    git worktree add "$branch_dir" -b "$branch" "$default_branch"
+    git worktree add "$branch_dir" -b "$branch" "$default_branch" || return 1
 
     cd "$branch_dir" || return 1
     echo "Created worktree: $repo_path/$branch_dir (branch: $branch)"
@@ -217,6 +256,7 @@ wt-new() {
 # Continue work on an existing remote branch
 # Usage: wt-continue <repo> <branch-name>
 wt-continue() {
+    wt_ensure_helpers || return 1
     local repo="$1"
     local branch="$2"
 
@@ -229,6 +269,11 @@ wt-continue() {
     local repo_path="$WORKTREE_BASE/$repo"
     local branch_dir
     branch_dir=$(_wt_branch_to_dir "$branch")
+
+    if [[ -z "$branch_dir" ]]; then
+        echo "Error: could not derive a directory name for branch '$branch'" >&2
+        return 1
+    fi
 
     if [[ ! -d "$repo_path/.bare" ]]; then
         echo "Error: Repository '$repo' not found at $repo_path"
@@ -260,7 +305,7 @@ wt-continue() {
     fi
 
     # Create worktree with a local branch tracking the remote
-    git worktree add -b "$branch" "$branch_dir" "origin/$branch"
+    git worktree add -b "$branch" "$branch_dir" "origin/$branch" || return 1
 
     cd "$branch_dir" || return 1
     echo "Created worktree: $repo_path/$branch_dir (tracking origin/$branch)"
@@ -270,6 +315,7 @@ wt-continue() {
 # Usage: wt-rm <repo> <branch-name> [--yes]
 #        wt-rm . [--yes]             (auto-detect from current directory)
 wt-rm() {
+    wt_ensure_helpers || return 1
     local repo=""
     local branch=""
     local delete_branch=false
@@ -361,6 +407,7 @@ wt-rm() {
 # List all worktrees for a repo
 # Usage: wt-ls <repo>
 wt-ls() {
+    wt_ensure_helpers || return 1
     local repo="$1"
 
     if [[ -z "$repo" ]]; then
@@ -378,6 +425,7 @@ wt-ls() {
 # Quick cd into a worktree
 # Usage: wt-cd <repo> [branch]
 wt-cd() {
+    wt_ensure_helpers || return 1
     local repo="$1"
     local branch="${2:-}"
 
@@ -398,6 +446,7 @@ wt-cd() {
 # Update main branch for a repo
 # Usage: wt-update <repo>
 wt-update() {
+    wt_ensure_helpers || return 1
     local repo="$1"
 
     if [[ -z "$repo" ]]; then
@@ -421,6 +470,7 @@ wt-update() {
 # Run from within a feature worktree
 # Usage: wt-rebase
 wt-rebase() {
+    wt_ensure_helpers || return 1
     local current_dir
     current_dir=$(pwd)
     local repo_root
@@ -447,6 +497,7 @@ wt-rebase() {
 # Create worktrees across multiple repos for a single task
 # Usage: wt-multi-new <branch-name> <repo1> <repo2> ...
 wt-multi-new() {
+    wt_ensure_helpers || return 1
     local branch="$1"
     shift
     local repos=("$@")
@@ -490,6 +541,7 @@ wt-multi-new() {
 # Add repos to an existing cross-repo task
 # Usage: wt-multi-add <branch-name> <repo1> <repo2> ...
 wt-multi-add() {
+    wt_ensure_helpers || return 1
     local branch="$1"
     shift
     local repos=("$@")
@@ -542,6 +594,7 @@ wt-multi-add() {
 # Remove a multi-repo task (archives instead of deleting)
 # Usage: wt-multi-rm <branch-name>
 wt-multi-rm() {
+    wt_ensure_helpers || return 1
     local branch="$1"
 
     if [[ -z "$branch" ]]; then
@@ -629,6 +682,7 @@ wt-multi-ls() {
 # cd into a cross-repo task directory
 # Usage: wt-multi-cd <branch-name>
 wt-multi-cd() {
+    wt_ensure_helpers || return 1
     local branch="$1"
 
     if [[ -z "$branch" ]]; then
