@@ -12,8 +12,8 @@
 class GitWorktreeUtils < Formula
   desc "Shell utilities for managing git worktrees with bare repo structure"
   homepage "https://github.com/huntcsg/git-worktree-utils"
-  url "https://github.com/huntcsg/git-worktree-utils/archive/refs/tags/v0.1.1.tar.gz"
-  sha256 "395ec3fb4815166d7d9ff8b796769549fe57ee1aab099aad0eafffea60271e50"
+  url "https://github.com/huntcsg/git-worktree-utils/archive/refs/tags/v0.3.1.tar.gz"
+  sha256 "24830869b7e09d3c7d8317983fa1a6936247e0a59d566a124892d8607d814762"
   license "Unlicense"
 
   def install

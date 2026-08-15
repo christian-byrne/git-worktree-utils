@@ -20,8 +20,11 @@ function __wt_branches
     set -l repo $argv[1]
     set -l repo_path "$WORKTREE_BASE/$repo"
     if test -d "$repo_path"
-        for dir_name in (ls -1 "$repo_path" 2>/dev/null | grep -v '^\.' | grep -v '^\.bare$')
-            __wt_dir_to_branch "$dir_name"
+        for dir in $repo_path/*/
+            set -l dir_name (basename $dir)
+            if test "$dir_name" != .bare
+                __wt_dir_to_branch "$dir_name"
+            end
         end
     end
 end
@@ -29,8 +32,8 @@ end
 # Helper: list tasks (returns branch names, not dir names)
 function __wt_tasks
     if test -d "$CROSS_REPO_BASE"
-        for dir_name in (ls -1 "$CROSS_REPO_BASE" 2>/dev/null)
-            __wt_dir_to_branch "$dir_name"
+        for dir in $CROSS_REPO_BASE/*/
+            __wt_dir_to_branch (basename $dir)
         end
     end
 end
@@ -95,3 +98,17 @@ complete -c wt-multi-rm -n "test (count (commandline -opc)) -eq 1" -a "(__wt_tas
 
 # wt-multi-ls: no args
 complete -c wt-multi-ls -f
+
+# Helper: list available mirrors
+function __wt_mirrors
+    if set -q WORKTREE_MIRROR_BASE; and test -d "$WORKTREE_MIRROR_BASE"
+        for entry in $WORKTREE_MIRROR_BASE/*
+            test -d "$entry"; or continue
+            basename "$entry" .git
+        end | sort -u
+    end
+end
+
+# wt-mirror-setup: mirror names
+complete -c wt-mirror-setup -f
+complete -c wt-mirror-setup -a "(__wt_mirrors)"
